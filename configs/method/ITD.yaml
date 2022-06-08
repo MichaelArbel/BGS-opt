@@ -1,0 +1,11 @@
+# @package method
+name : 'ITD'
+forward:
+  name: 'core.solvers.UnrolledForwardSolver'
+  warm_start: true
+  n_iter : 1
+  increase_n_iter: false
+  fac_increase : 0
+backward:
+  name: 'core.solvers.UnrolledBackwardSolver'
+  increase_n_iter: false

@@ -1,0 +1,22 @@
+defaults:
+  - system : default 
+  - cluster: OAR
+  - launcher: default
+  - logs: default
+  - metrics: default
+  - method : AmIGO
+  - loader : zeros
+  - loss: kernel_ridge
+  - training: SGD
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  hydra_logging:
+    disable_existing_loggers: True
+  job_logging:
+    disable_existing_loggers: True

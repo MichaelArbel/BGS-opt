@@ -1,0 +1,23 @@
+# @package loss
+
+objective:
+  inner:
+    name: 'trainers.multitask.bindings.MutiTaskLoss'
+    weighted: True
+    apply_reg: False
+    reg: 0.0005
+    num_tasks: ${loader.num_tasks}
+  outer:
+    name: 'trainers.multitask.bindings.MutiTaskLoss'
+    weighted: False
+    num_tasks : ${loader.num_tasks}
+model:
+  inner:
+    name: 'trainers.multitask.bindings.models.VectMTLVGG16'
+    num_tasks : ${loader.num_tasks}
+    path: '' #'/home/marbel/Documents/projects/bilevel_opt_code/NonconvexBilevel/data/outputs/debug/321/torch_models/inner_model_000.pth'
+  outer: 
+    name: 'core.models.Identity'
+    dim: ${loader.num_tasks}
+    init: 0.1
+    path: ''

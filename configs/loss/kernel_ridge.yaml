@@ -1,0 +1,20 @@
+# @package loss
+
+objective:
+  inner:
+    name: 'core.losses.Logistic'
+    reg: true
+  outer:
+    name: 'core.losses.Logistic'
+    reg: false
+model:
+  inner:
+    name: 'core.models.Linear'
+    n_features : 1
+    n_classes : 1
+    with_bias : false
+    path: ''
+  outer: 
+    name: 'core.models.Identity'
+    dim: 1
+    path: ''

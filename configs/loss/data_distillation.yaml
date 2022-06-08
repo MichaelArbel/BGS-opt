@@ -1,0 +1,20 @@
+# @package loss
+
+objective:
+  inner: 
+    name: 'core.losses.LogisticDistill'
+    is_inner: true
+  outer:
+    name: 'core.losses.LogisticDistill'
+    is_inner: false
+model:
+  inner:
+    name: 'core.models.Linear'
+    n_features : 1
+    n_classes : 1
+    with_bias : false
+    reg: 10.
+    
+  outer:
+    name: 'core.models.ModelDataset'
+    reg: 0.

@@ -1,0 +1,18 @@
+# @package method
+name : 'AID-CG'
+
+forward:
+  name: 'core.solvers.ForwardSolver'
+  warm_start: true
+  n_iter : 1
+  increase_n_iter: false
+  fac_increase : 0
+backward:
+  name: 'core.solvers.BackwardSolverCG'
+  warm_start: false
+  lr : 0.1
+  n_iter : 1
+  increase_n_iter: false
+  fac_increase : 0
+  stochastic: false
+  tol: 0.0000000000001

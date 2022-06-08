@@ -1,0 +1,17 @@
+# @package method
+name : 'AmIGO'
+
+forward:
+  name: 'core.solvers.ForwardSolver'
+  warm_start: true
+  n_iter : 1
+  increase_n_iter: false
+  fac_increase : 0
+backward:
+  name: 'core.solvers.BackwardSolverSGD'
+  warm_start: true
+  lr: 0.1
+  n_iter : 1
+  increase_n_iter: false
+  stochastic: false
+  tol: 0.0000000000001

@@ -1,0 +1,19 @@
+# @package training
+outer_iterations: 100
+
+optimizer:
+  outer:
+    name: 'core.optimizers.AdamOptimizer'
+    lr : 0.01
+    momentum: 0.
+    nesterov: False
+  inner:
+    name: 'core.optimizers.AdamOptimizer'
+    lr : 0.01
+    momentum: 0.
+    nesterov: False
+scheduler:
+  outer:
+    name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
+  inner:
+    name: 'torch.optim.lr_scheduler.CosineAnnealingLR'

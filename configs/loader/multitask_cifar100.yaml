@@ -1,0 +1,9 @@
+# @package loader
+
+loader: 'trainers.multitask.bindings.MutiTaskLoader'
+name : 'datasets.CIFAR100MTL'
+b_size : 32
+eval_b_size: 32
+num_tasks: 20
+subset_id: 0
+data_path : 'data/datasets'

@@ -1,0 +1,14 @@
+# @package loader
+
+loader : 'trainers.utils.loaders.DefaultLoader'
+name : 'Zeros'
+b_size : 1
+
+inner:
+  dim: 11
+  size: 1000
+outer:
+  dim: 20
+  size: 1000
+
+  
