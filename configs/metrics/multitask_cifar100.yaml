@@ -1,11 +1,11 @@
 # @package metrics
 disp_freq: 10
-max_outer_iter: 1
-max_inner_iter : 1
+max_upper_iter: 1
+max_lower_iter : 1
 epoch_eval: True
 log_artefacts_freq: 200
 log_artifacts: True
-log_inner_cond: False
-freq_inner_cond: 5000
+log_lower_cond: False
+freq_lower_cond: 5000
 eval_test: True
 name: 'multivalue'

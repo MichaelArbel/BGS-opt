@@ -4,7 +4,7 @@ defaults:
   - launcher: default
   - logs: default
   - metrics: default
-  - method : AmIGO
+  - selection : BGS
   - loader : zeros
   - loss: kernel_ridge
   - training: SGD

@@ -1,24 +1,24 @@
 # @package training
-outer_iterations: 100
+upper_iterations: 100
 total_epoch: 200
 by_epoch: True
 trainer_name: 'trainers.multitask.trainer_multitask.Trainer'
 
 optimizer:
-  outer:
-    name: 'torch.optim.Adam'
-    lr : 0.0003
-  inner:
+  upper:
     name: 'torch.optim.SGD'
     lr : 0.1
+    weight_decay: 0.
     momentum: 0.9
-    weight_decay: 0.0005
+  lower:
+    name: 'torch.optim.Adam'
+    lr : 0.0003
 scheduler:
-  outer:
+  lower:
     name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
     T_max: 1000
     use_scheduler: False
-  inner:
+  upper:
     name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
     T_max: ${training.total_epoch}
     use_scheduler: True

@@ -24,14 +24,15 @@ from itertools import cycle
 
 
 class RingIterator:
-	def __init__(self, initial_iterator,task,device,dtype):
-		self.device=device
-		self.dtype = dtype
+	def __init__(self, initial_iterator,index=None):
 		self.initial_iterator = initial_iterator
-		self.task = task
+		self.index = index
 		self.generator = None
 	def make_generator(self):
-		return zip(*[iter(self.initial_iterator),cycle([self.task])])
+		if self.index is not None:
+			return zip(*[iter(self.initial_iterator),cycle([self.index])])
+		else:
+			return zip(*[iter(self.initial_iterator)])
 	def __next__(self, *args):
 		try:
 			return next(self.generator)
@@ -42,11 +43,8 @@ class RingIterator:
 		return self.make_generator()
 
 
-
 class RingIteratorList:
-	def __init__(self, ring_iterator_list,device,dtype):
-		self.device= device
-		self.dtype=dtype
+	def __init__(self, ring_iterator_list):
 		self.ring_iterator_list = ring_iterator_list
 		self.generator = None
 	def make_generator(self):
@@ -59,6 +57,26 @@ class RingIteratorList:
 			return next(self.generator)
 	def __iter__(self):
 		return self.make_generator()
+
+
+
+class RingGenerator:
+	def __init__(self, init_generator):
+		self.init_generator = init_generator
+		self.generator = None
+	def make_generator(self):
+		return zip(*[iter(self.initial_iterator)])
+	def __next__(self, *args):
+		try:
+			return next(self.generator)
+		except:
+			self.generator = self.make_generator()
+			return next(self.generator)
+	def __iter__(self):
+		return self.make_generator()
+
+
+
 
 
 
@@ -159,8 +177,8 @@ class Loader(object):
 		eval_b_size = self.args['eval_b_size']
 		data, meta_data = self.load_data(b_size)
 		eval_data,_ = self.load_data(eval_b_size)
-		data['eval_inner_loader'] = eval_data['inner_loader']
-		data['eval_outer_loader'] = eval_data['outer_loader']	
+		data['eval_lower_loader'] = eval_data['lower_loader']
+		data['eval_upper_loader'] = eval_data['upper_loader']	
 		self.data = data
 		self.meta_data = meta_data
 
@@ -214,17 +232,17 @@ def torchvision_classif_dataset(args,b_size,dtype, device, num_workers):
 		test_data.append(data)
 	
 
-	data = {'inner_loader':CustomListIterator(data_train,device=device,dtype=dtype),
-			 'outer_loader':CustomListIterator(data_val,device=device,dtype=dtype),
-			 'test_outer_loader': CustomListIterator(test_data,device=device,dtype=dtype),
-			 'test_inner_loader': CustomListIterator(test_data,device=device,dtype=dtype),
+	data = {'lower_loader':CustomListIterator(data_train,device=device,dtype=dtype),
+			 'upper_loader':CustomListIterator(data_val,device=device,dtype=dtype),
+			 'test_upper_loader': CustomListIterator(test_data,device=device,dtype=dtype),
+			 'test_lower_loader': CustomListIterator(test_data,device=device,dtype=dtype),
 			}
 
 	x,y= next(iterators[0])
 	n_features, shape = get_n_features(x,n_classes)
 	meta_data = {'n_classes':n_classes,
 				'n_features':n_features,
-				'shape':sape}
+				'shape':shape}
 
 	return data, meta_data
 
@@ -257,16 +275,16 @@ def get_n_features(x):
 	return n_features, shape
 
 def data_Zeros(args,b_size, device, dtype):
-	inner_dim = args['inner']['dim']
-	outer_dim = args['outer']['dim']
-	inner_data = [torch.zeros([args['inner']['size'],inner_dim])]
-	outer_data = [torch.zeros([args['outer']['size'],outer_dim])]
-	meta_data = {'inner_dim':inner_dim,
-				 'outer_dim':outer_dim}
-	data = {'inner_loader':CustomTensorIterator(inner_data,batch_size=1,device=device,dtype=dtype),
-		 'outer_loader':CustomTensorIterator(outer_data,batch_size=1,device=device,dtype=dtype),
-		 'test_outer_loader': CustomTensorIterator(outer_data,batch_size=1,device=device,dtype=dtype),
-		 'test_inner_loader': CustomTensorIterator(inner_data,batch_size=1,device=device,dtype=dtype),
+	lower_dim = args['lower']['dim']
+	upper_dim = args['upper']['dim']
+	lower_data = [torch.zeros([args['lower']['size'],lower_dim])]
+	upper_data = [torch.zeros([args['upper']['size'],upper_dim])]
+	meta_data = {'lower_dim':lower_dim,
+				 'upper_dim':upper_dim}
+	data = {'lower_loader':CustomTensorIterator(lower_data,batch_size=1,device=device,dtype=dtype),
+		 'upper_loader':CustomTensorIterator(upper_data,batch_size=1,device=device,dtype=dtype),
+		 'test_upper_loader': CustomTensorIterator(upper_data,batch_size=1,device=device,dtype=dtype),
+		 'test_lower_loader': CustomTensorIterator(lower_data,batch_size=1,device=device,dtype=dtype),
 		}
 	return data, meta_data
 
@@ -315,10 +333,10 @@ def data_20newsgroups(args,b_size,dtype, device, num_workers):
 			data_val.append(next(val_iterator))
 
 
-		data = {'inner_loader':CustomListIterator(data_train,device=device,dtype=dtype),
-				 'outer_loader':CustomListIterator(data_val,device=device,dtype=dtype),
-				 'test_outer_loader': CustomListIterator([(x_test,y_test)],device=device,dtype=dtype),
-				 'test_inner_loader': CustomListIterator([(x_test,y_test)],device=device,dtype=dtype),
+		data = {'lower_loader':CustomListIterator(data_train,device=device,dtype=dtype),
+				 'upper_loader':CustomListIterator(data_val,device=device,dtype=dtype),
+				 'test_upper_loader': CustomListIterator([(x_test,y_test)],device=device,dtype=dtype),
+				 'test_lower_loader': CustomListIterator([(x_test,y_test)],device=device,dtype=dtype),
 				}
 
 		meta_data = {'n_classes':n_classes,

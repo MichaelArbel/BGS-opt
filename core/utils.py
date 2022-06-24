@@ -8,45 +8,76 @@ import omegaconf
 
 from functorch import jvp, grad, vjp
 
+
+
+
+class AttrList(object):
+	def __init__(self,module,attr_list,tag):
+		self.module = module
+		self.tag = tag
+		for i,w in enumerate(attr_list):
+			setattr(module,tag+str(i),w)
+		self.num_attributes = len(attr_list)
+	def __getitem__(self,key):
+		return getattr(self.module,self.tag+str(key))
+	def __iter__(self):
+		return iter(self.__getitem__(i) for i in range(self.num_attributes))
+
+
+
+
+def detach_states(state_tuples):
+	fields = state_tuples._fields
+	key_values = {}
+	for field in fields:
+		state_tuple = eval('state_tuples.'+field)
+		try:
+			if type(state_tuple[0])==torch.Tensor:
+				new_state_tuple = tuple([state.data for state in state_tuple])
+				key_values[field] = new_state_tuple
+		except:
+			pass
+	return state_tuples._replace(**key_values)
+			
 def hvp(f, primals, tangents):
   return jvp(grad(f), primals, tangents)[1]
 
 def hvp_revrev(f, primals, tangents):
-  _, vjp_fn = vjp(grad(f), *primals)
-  return vjp_fn(*tangents)[0]
-  
+	_, vjp_fn = vjp(grad(f), *primals)
+	return vjp_fn(*tangents)[0]
+
 # class Config(dict):
 #     def __getattr__(self, name):
 #         return self[name]
 class Config(dict):
-    def __init__(self, *args, **kwargs):
-        super(Config, self).__init__(*args, **kwargs)
-        self.__dict__ = self
+	def __init__(self, *args, **kwargs):
+		super(Config, self).__init__(*args, **kwargs)
+		self.__dict__ = self
 
 def config_to_dict(config):
-    done = False
-    out_dict = {}
-    for key, value in config.items():
-        if isinstance(value, omegaconf.dictconfig.DictConfig):
-            out_dict[key] = config_to_dict(value)
-        else:
-            out_dict[key] = value
-    return Config(out_dict)
+	done = False
+	out_dict = {}
+	for key, value in config.items():
+		if isinstance(value, omegaconf.dictconfig.DictConfig):
+			out_dict[key] = config_to_dict(value)
+		else:
+			out_dict[key] = value
+	return Config(out_dict)
 
 
 def jacobian(y, x, create_graph=False):                                                               
-    jac = []                                                                                          
-    flat_y = y.reshape(-1)                                                                            
-    grad_y = torch.zeros_like(flat_y)                                                                 
-    for i in range(len(flat_y)):                                                                      
-        grad_y[i] = 1.                                                                                
-        grad_x, = torch.autograd.grad(flat_y, x, grad_y, retain_graph=True, create_graph=create_graph)
-        jac.append(grad_x.reshape(x.shape))                                                           
-        grad_y[i] = 0.                                                                                
-    return torch.stack(jac).reshape(y.shape + x.shape)                                                
-                                                                                                      
+	jac = []                                                                                          
+	flat_y = y.reshape(-1)                                                                            
+	grad_y = torch.zeros_like(flat_y)                                                                 
+	for i in range(len(flat_y)):                                                                      
+		grad_y[i] = 1.                                                                                
+		grad_x, = torch.autograd.grad(flat_y, x, grad_y, retain_graph=True, create_graph=create_graph)
+		jac.append(grad_x.reshape(x.shape))                                                           
+		grad_y[i] = 0.                                                                                
+	return torch.stack(jac).reshape(y.shape + x.shape)                                                
+																									  
 def hessian(y, x):                                                                                    
-    return jacobian(jacobian(y, x, create_graph=True), x) 
+	return jacobian(jacobian(y, x, create_graph=True), x) 
 
 def cond_loss(loss,dataloader,params):
 	inputs = next(dataloader)
@@ -158,35 +189,35 @@ def add_prefix_to_keys_dict(dico,prefix):
 		dico[prefix+key] = dico.pop(key)
 
 
-def eval_avg_time_grads(outer_loader,
-						inner_loader, 
-						outer_loss,
-						inner_loss,
+def eval_avg_time_grads(upper_loader,
+						lower_loader, 
+						upper_loss,
+						lower_loss,
 						device,
 						dtype):
-	out_dict = { 'cost_outer_grad': 0,
-				'cost_inner_grad': 0,
-				'cost_inner_hess': 0,
-				'cost_inner_jac': 0 }
+	out_dict = { 'cost_upper_grad': 0,
+				'cost_lower_grad': 0,
+				'cost_lower_hess': 0,
+				'cost_lower_jac': 0 }
 	K = 10
-	inner_params = inner_loss.inner_params
-	outer_params = outer_loss.outer_params
+	lower_params = lower_loss.lower_params
+	upper_params = upper_loss.upper_params
 	for k in range(K):
-		data = next(outer_loader)
+		data = next(upper_loader)
 		data = to_device(data,device,dtype)
 		
 		time_1 = time.time()
-		loss = outer_loss(data)
-		grad_outer = autograd.grad(outputs=loss,inputs=inner_params+outer_params,allow_unused=True)
+		loss = upper_loss(data)
+		grad_upper = autograd.grad(outputs=loss,inputs=lower_params+upper_params,allow_unused=True)
 
 		time_11 = time.time()
-		data = next(inner_loader)
+		data = next(lower_loader)
 		data = to_device(data,device,dtype)
 		
 		time_2 = time.time()
-		loss = inner_loss(data)
-		grad_inner = autograd.grad(outputs=loss, 
-							inputs=inner_params,
+		loss = lower_loss(data)
+		grad_lower = autograd.grad(outputs=loss, 
+							inputs=lower_params,
 							grad_outputs=None, 
 							retain_graph=True,
 							create_graph=True, 
@@ -194,12 +225,12 @@ def eval_avg_time_grads(outer_loader,
 							allow_unused=True)
 
 
-		#grad_inner = autograd.grad(outputs=loss,inputs=inner_params, create_graph=True)
+		#grad_lower = autograd.grad(outputs=loss,inputs=lower_params, create_graph=True)
 
 		time_3 = time.time()
-		hess = grad_with_none(outputs=grad_inner, 
-			inputs=inner_params, 
-			grad_outputs=grad_outer[:len(inner_params)], 
+		hess = grad_with_none(outputs=grad_lower, 
+			inputs=lower_params, 
+			grad_outputs=grad_upper[:len(lower_params)], 
 			retain_graph=True,
 			create_graph=False, 
 			only_inputs=True,
@@ -207,9 +238,9 @@ def eval_avg_time_grads(outer_loader,
 
 
 		time_4 = time.time()
-		hess = grad_with_none(outputs=grad_inner, 
-			inputs=outer_params, 
-			grad_outputs=grad_outer[:len(inner_params)], 
+		hess = grad_with_none(outputs=grad_lower, 
+			inputs=upper_params, 
+			grad_outputs=grad_upper[:len(lower_params)], 
 			retain_graph=False,
 			create_graph=False, 
 			only_inputs=True,
@@ -217,10 +248,10 @@ def eval_avg_time_grads(outer_loader,
 
 		time_5 = time.time()
 
-		out_dict['cost_outer_grad'] += (time_11-time_1)/K
-		out_dict['cost_inner_grad'] += (time_3-time_2)/K
-		out_dict['cost_inner_hess'] += (time_4-time_3)/K
-		out_dict['cost_inner_jac'] += (time_5-time_4)/K
+		out_dict['cost_upper_grad'] += (time_11-time_1)/K
+		out_dict['cost_lower_grad'] += (time_3-time_2)/K
+		out_dict['cost_lower_hess'] += (time_4-time_3)/K
+		out_dict['cost_lower_jac'] += (time_5-time_4)/K
 	return out_dict
 
 def accuracy(predictions, targets):
@@ -263,11 +294,11 @@ def fast_adapt(train_batch,
 
 class Lambda(nn.Module):
 
-    def __init__(self, fn):
-        super(Lambda, self).__init__()
-        self.fn = fn
+	def __init__(self, fn):
+		super(Lambda, self).__init__()
+		self.fn = fn
 
-    def forward(self, x):
-        return self.fn(x)
+	def forward(self, x):
+		return self.fn(x)
 
 

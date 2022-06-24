@@ -39,10 +39,10 @@ class Trainer(Experimentalist):
 		self.mode = 'train'
 		self.counter = 0
 		self.epoch = 0
-		self.avg_outer_loss = 0. 
-		self.avg_inner_loss = 0.
+		self.avg_upper_loss = 0. 
+		self.avg_lower_loss = 0.
 		self.amortized_grad = None
-		self.outer_grad = None
+		self.upper_grad = None
 		self.alg_time = 0.
 
 		self.build_model()
@@ -51,7 +51,7 @@ class Trainer(Experimentalist):
 
 	def build_model(self):
 
-		# create data loaders for inner and outer problems
+		# create data loaders for lower and upper problems
 		
 		self.timer(self.counter, " loading data " )
 		self.loader = hp.config_to_instance(config_module_name="loader",
@@ -59,68 +59,68 @@ class Trainer(Experimentalist):
 											dtype=self.dtype,
 											device=self.device,
 											**self.args.loader)
-		self.inner_loader = self.loader.data['inner_loader'] 
-		self.outer_loader = self.loader.data['outer_loader']
+		self.lower_loader = self.loader.data['lower_loader'] 
+		self.upper_loader = self.loader.data['upper_loader']
 		self.meta_data = self.loader.meta_data
 		self.update_args()
 		# create either a pytorch Module or a list of parameters
-		self.timer(self.counter, " creating inner model " )
-		inner_model_path = self.args.loss.model.inner.pop("path", None)
-		self.inner_model = hp.config_to_instance(**self.args.loss.model.inner)
-		self.inner_model = hp.init_model(self.inner_model,inner_model_path,
+		self.timer(self.counter, " creating lower model " )
+		lower_model_path = self.args.loss.model.lower.pop("path", None)
+		self.lower_model = hp.config_to_instance(**self.args.loss.model.lower)
+		self.lower_model = hp.init_model(self.lower_model,lower_model_path,
 										self.dtype, 
 										self.device, 
-										is_inner=True
+										is_lower=True
 										)
-		self.log_artifacts(self.inner_model,0,'torch_models', tag='inner_model')
+		self.log_artifacts(self.lower_model,0,'torch_models', tag='lower_model')
 
-		self.timer(self.counter, " creating outer model " )
-		outer_model_path = self.args.loss.model.outer.pop("path", None)
-		self.outer_model = hp.config_to_instance(**self.args.loss.model.outer)
-		self.outer_model = hp.init_model(self.outer_model,outer_model_path,
+		self.timer(self.counter, " creating upper model " )
+		upper_model_path = self.args.loss.model.upper.pop("path", None)
+		self.upper_model = hp.config_to_instance(**self.args.loss.model.upper)
+		self.upper_model = hp.init_model(self.upper_model,upper_model_path,
 										self.dtype, 
 										self.device, 
-										is_inner=False
+										is_lower=False
 										)
 		
 
 		# create a pytorch Modules whose output is a scalar
 		self.timer(self.counter, " creating losses " )
 
-		self.inner_loss = hp.config_to_instance(**self.args.loss.objective.inner,
-											outer_model=self.outer_model, 
-											inner_model=self.inner_model, 
+		self.lower_loss = hp.config_to_instance(**self.args.loss.objective.lower,
+											upper_model=self.upper_model, 
+											lower_model=self.lower_model, 
 											device=self.device)
-		self.outer_loss = hp.config_to_instance(**self.args.loss.objective.outer,
-											outer_model=self.outer_model, 
-											inner_model=self.inner_model, 
+		self.upper_loss = hp.config_to_instance(**self.args.loss.objective.upper,
+											upper_model=self.upper_model, 
+											lower_model=self.lower_model, 
 											device=self.device)
        
-		# Construct the approximate solution to inner problem
-		self.inner_params = self.inner_loss.inner_params
-		self.outer_params = self.inner_loss.outer_params
+		# Construct the approximate solution to lower problem
+		self.lower_params = self.lower_loss.lower_params
+		self.upper_params = self.lower_loss.upper_params
 
 		self.timer(self.counter, " creating optimizers " )
 
-		self.outer_optimizer = hp.config_to_instance(params=self.outer_params, **self.args.training.optimizer.outer)
-		self.inner_optimizer = hp.config_to_instance(params=self.inner_params, **self.args.training.optimizer.inner)
+		self.upper_optimizer = hp.config_to_instance(params=self.upper_params, **self.args.training.optimizer.upper)
+		self.lower_optimizer = hp.config_to_instance(params=self.lower_params, **self.args.training.optimizer.lower)
 
-		self.use_outer_scheduler = self.args.training.scheduler.outer.pop("use_scheduler", None)
-		self.use_inner_scheduler = self.args.training.scheduler.inner.pop("use_scheduler", None)
-		if self.use_outer_scheduler:
-			self.outer_scheduler = hp.config_to_instance(optimizer=self.outer_optimizer, **self.args.training.scheduler.outer)
-		if self.use_inner_scheduler:
-			self.inner_scheduler = hp.config_to_instance(optimizer=self.inner_optimizer, **self.args.training.scheduler.inner)
+		self.use_upper_scheduler = self.args.training.scheduler.upper.pop("use_scheduler", None)
+		self.use_lower_scheduler = self.args.training.scheduler.lower.pop("use_scheduler", None)
+		if self.use_upper_scheduler:
+			self.upper_scheduler = hp.config_to_instance(optimizer=self.upper_optimizer, **self.args.training.scheduler.upper)
+		if self.use_lower_scheduler:
+			self.lower_scheduler = hp.config_to_instance(optimizer=self.lower_optimizer, **self.args.training.scheduler.lower)
 		
 		self.timer(self.counter, " creating solvers " )		
 
-		self.forward_solver = hp.config_to_instance(optimizer=self.inner_optimizer,**self.args.method.forward)
-		self.backward_solver = hp.config_to_instance(module=self.inner_loss, **self.args.method.backward)
+		self.forward_solver = hp.config_to_instance(optimizer=self.lower_optimizer,**self.args.method.forward)
+		self.backward_solver = hp.config_to_instance(module=self.lower_loss, **self.args.method.backward)
 
 		# Construct the hyper-loss
-		self.hyperloss = HyperLoss(self.outer_loss,
-									self.inner_loss, 
-									self.inner_loader,
+		self.hyperloss = HyperLoss(self.upper_loss,
+									self.lower_loss, 
+									self.lower_loader,
 									self.forward_solver,
 									self.backward_solver)
 
@@ -138,44 +138,44 @@ class Trainer(Experimentalist):
 		if self.args.training.by_epoch:
 			return self.args.training.total_epoch*total_batches, total_batches
 		else:
-			return self.args.training.outer_iterations, total_batches
+			return self.args.training.upper_iterations, total_batches
 
 
 	def update_args(self):
-		if self.args.loss.model.inner.name=='core.models.Linear':
-			self.args.loss.model.inner.n_features =  self.meta_data['n_features']
-			self.args.loss.model.inner.n_classes = self.meta_data['n_classes']
-#		if self.args.loss.model.outer.name=='core.models.Identity':
-#			self.args.loss.model.outer.dim = self.meta_data['n_features']
+		if self.args.loss.model.lower.name=='core.models.Linear':
+			self.args.loss.model.lower.n_features =  self.meta_data['n_features']
+			self.args.loss.model.lower.n_classes = self.meta_data['n_classes']
+#		if self.args.loss.model.upper.name=='core.models.Identity':
+#			self.args.loss.model.upper.dim = self.meta_data['n_features']
 
 	def build_metrics(self):
 		self.metrics = Metrics(self.args.metrics,self.device,self.dtype)
 		name = self.args.metrics.name
 		condition = lambda counter : counter%self.total_batches==0
-		self.metrics.register_metric(self.outer_loss,
-									self.loader.data['test_outer_loader'],
+		self.metrics.register_metric(self.upper_loss,
+									self.loader.data['test_upper_loader'],
 									0,
-									'test_outer',
+									'test_upper',
 									metric=name,
 									condition=condition)
-		# self.metrics.register_metric(self.outer_loss,
-		# 							self.loader.data['eval_outer_loader'],
-		# 							self.args.metrics.max_outer_iter,
-		# 							'train_outer',
+		# self.metrics.register_metric(self.upper_loss,
+		# 							self.loader.data['eval_upper_loader'],
+		# 							self.args.metrics.max_upper_iter,
+		# 							'train_upper',
 		# 							metric=name)
-		# self.metrics.register_metric(self.inner_loss,
-		# 							self.loader.data['eval_inner_loader'],
-		# 							self.args.metrics.max_inner_iter,
-		# 							'train_inner',
+		# self.metrics.register_metric(self.lower_loss,
+		# 							self.loader.data['eval_lower_loader'],
+		# 							self.args.metrics.max_lower_iter,
+		# 							'train_lower',
 		# 							metric=name)
 
-		if self.args.metrics.log_inner_cond:
-			condition = lambda counter : counter%self.args.freq_inner_cond==0
-			self.metrics.register_metric(self.inner_loss,
-										self.loader.data['eval_inner_loader'],
+		if self.args.metrics.log_lower_cond:
+			condition = lambda counter : counter%self.args.freq_lower_cond==0
+			self.metrics.register_metric(self.lower_loss,
+										self.loader.data['eval_lower_loader'],
 										1,
-										'inner_kappa',
-										func_args={'params':self.inner_params[0]},
+										'lower_kappa',
+										func_args={'params':self.lower_params[0]},
 										condition=condition,
 										metric='cond')
 
@@ -190,11 +190,11 @@ class Trainer(Experimentalist):
 	def get_grad_counts(self):
 		return self.hyperloss.get_grad_counts()
 	def train(self):
-		self.outer_optimizer.zero_grad()
+		self.upper_optimizer.zero_grad()
 		if self.counter==0:
 			self.alg_time = 0.
 		while self.counter<=self.count_max:
-			for batch_idx, data in enumerate(self.outer_loader):
+			for batch_idx, data in enumerate(self.upper_loader):
 				if self.counter>self.count_max:
 					break					
 				self.counter +=1
@@ -212,11 +212,11 @@ class Trainer(Experimentalist):
 		metrics.update({'iter': self.counter, 'time': self.alg_time, 'epoch':self.epoch})
 		metrics.update(self.get_grad_counts())
 		self.log_metrics(metrics)
-		self.timer(self.counter, "Epoch %d | Alg Time %.2f | outer loss: %.2f, outer acc: %.2f | test loss: %.2f, test acc: %.2f" % 
+		self.timer(self.counter, "Epoch %d | Alg Time %.2f | upper loss: %.2f, upper acc: %.2f | test loss: %.2f, test acc: %.2f" % 
 							(self.epoch,self.alg_time,
-							metrics['train_outer_loss'], metrics['train_outer_acc'],
-							metrics['test_outer_loss_all'], metrics['test_outer_acc_all']))
-		#self.timer(self.counter, " outer loss: , inner loss: " )
+							metrics['train_upper_loss'], metrics['train_upper_acc'],
+							metrics['test_upper_loss_all'], metrics['test_upper_acc_all']))
+		#self.timer(self.counter, " upper loss: , lower loss: " )
 
 		#print('Epoch {}| Time {}'.format(self.epoch,self.alg_time))
 		#print(metrics)
@@ -227,60 +227,60 @@ class Trainer(Experimentalist):
 			data = data[0]
 		data = utils.to_device(data,self.device,self.dtype)
 		
-		inner_loader = self.inner_loader
+		lower_loader = self.lower_loader
 		amortized_grad = self.amortized_grad
-		inner_params = self.inner_params
-		inner_params_out, iterates,inner_loss = self.forward_solver.run(self.inner_loss,inner_loader,inner_params)
+		lower_params = self.lower_params
+		lower_params_out, iterates,lower_loss = self.forward_solver.run(self.lower_loss,lower_loader,lower_params)
 		
-		utils.zero_grad(inner_params)
-		utils.zero_grad(self.outer_params)
+		utils.zero_grad(lower_params)
+		utils.zero_grad(self.upper_params)
 		loss, acc = self.hyperloss.func(data,with_acc=True)
 		
-		torch.autograd.backward(loss, retain_graph=True, create_graph=False, inputs=inner_params+self.outer_params)
+		torch.autograd.backward(loss, retain_graph=True, create_graph=False, inputs=lower_params+self.upper_params)
 		loss = loss.detach().cpu()
-		#inner_loss, inner_acc = inner_out
-		inner_loss = inner_loss.detach().cpu()
-		#inner_acc = inner_acc.detach().cpu()
-		self.hyperloss.counter_outer_grad +=1
-		for p in inner_params:
+		#lower_loss, lower_acc = lower_out
+		lower_loss = lower_loss.detach().cpu()
+		#lower_acc = lower_acc.detach().cpu()
+		self.hyperloss.counter_upper_grad +=1
+		for p in lower_params:
 			if p.grad is None:
 				p.grad = torch.zeros_like(p)
-		inner_grads = [p.grad for p in inner_params]
+		lower_grads = [p.grad for p in lower_params]
 		
-		out, amortized_grad =  self.backward_solver.run(self.inner_loss,
-						inner_loader,
-						self.outer_params,
-						inner_params,
+		out, amortized_grad =  self.backward_solver.run(self.lower_loss,
+						lower_loader,
+						self.upper_params,
+						lower_params,
 						iterates,
 						amortized_grad,
-						inner_grads)
-		out = [o if o is not None else torch.zeros_like(p) for p,o in zip(self.outer_params,out)]
-		for p,o in zip(self.outer_params, out):
+						lower_grads)
+		out = [o if o is not None else torch.zeros_like(p) for p,o in zip(self.upper_params,out)]
+		for p,o in zip(self.upper_params, out):
 			if p.grad is not None:
 				p.grad  = p.grad + o
 			else:
 				p.grad = 1.*o
 		
-		# if self.outer_grad is not None:
-		# 	self.outer_grad = tuple([p+1.*o.grad for p,o in zip(self.outer_grad,self.outer_params)])
+		# if self.upper_grad is not None:
+		# 	self.upper_grad = tuple([p+1.*o.grad for p,o in zip(self.upper_grad,self.upper_params)])
 		# else:
-		# 	self.outer_grad = tuple([1.*p.grad for p in self.outer_params])
+		# 	self.upper_grad = tuple([1.*p.grad for p in self.upper_params])
 				
-		# for p, g in zip(self.outer_params,self.outer_grad):
+		# for p, g in zip(self.upper_params,self.upper_grad):
 		# 	p.grad = 1.*g
-		self.outer_optimizer.step()
-		self.outer_optimizer.zero_grad()
-		#self.outer_grad = None
+		self.upper_optimizer.step()
+		self.upper_optimizer.zero_grad()
+		#self.upper_grad = None
 
 		self.amortized_grad = amortized_grad
 
 		end_time_iter = time.time()
 		self.alg_time += end_time_iter-start_time_iter
 
-		metrics = { 'train_outer_loss': loss.item(),
-					'train_inner_loss': inner_loss.item(),
-					'train_outer_acc': 100.*acc.item()}
-		#print(self.outer_params)		
+		metrics = { 'train_upper_loss': loss.item(),
+					'train_lower_loss': lower_loss.item(),
+					'train_upper_acc': 100.*acc.item()}
+		#print(self.upper_params)		
 		return metrics
 
 	def iteration(self,data):
@@ -290,75 +290,75 @@ class Trainer(Experimentalist):
 		data = utils.to_device(data,self.device,self.dtype)
 		
 
-		inner_loader = self.inner_loader
+		lower_loader = self.lower_loader
 		amortized_grad = self.amortized_grad
-		inner_params = self.inner_params
+		lower_params = self.lower_params
 		
 		time_1 = time.time()
-		inner_params_out, iterates,inner_loss = self.forward_solver.run(self.inner_loss,inner_loader,inner_params)
+		lower_params_out, iterates,lower_loss = self.forward_solver.run(self.lower_loss,lower_loader,lower_params)
 		time_2 = time.time()
 		print('Time Forward: {}'.format(time_2-time_1) )
 
-		utils.zero_grad(inner_params)
-		utils.zero_grad(self.outer_params)
+		utils.zero_grad(lower_params)
+		utils.zero_grad(self.upper_params)
 		loss = self.hyperloss.func(data)
 		
-		torch.autograd.backward(loss, retain_graph=True, create_graph=False, inputs=inner_params+self.outer_params)
+		torch.autograd.backward(loss, retain_graph=True, create_graph=False, inputs=lower_params+self.upper_params)
 		loss = loss.detach().cpu()
-		#inner_loss = inner_loss.detach().cpu()
-		self.hyperloss.counter_outer_grad +=1
-		for p in inner_params:
+		#lower_loss = lower_loss.detach().cpu()
+		self.hyperloss.counter_upper_grad +=1
+		for p in lower_params:
 			if p.grad is None:
 				p.grad = torch.zeros_like(p)
-		inner_grads = [p.grad for p in inner_params]
+		lower_grads = [p.grad for p in lower_params]
 
 		time_1 = time.time()
-		out, amortized_grad =  self.backward_solver.run(self.inner_loss,
-						inner_loader,
-						self.outer_params,
-						inner_params,
+		out, amortized_grad =  self.backward_solver.run(self.lower_loss,
+						lower_loader,
+						self.upper_params,
+						lower_params,
 						iterates,
 						amortized_grad,
-						inner_grads)
+						lower_grads)
 		time_2 = time.time()
 		print('Time Backward: {}'.format(time_2-time_1) )
-		# out = [o if o is not None else torch.zeros_like(p) for p,o in zip(self.outer_params,out)]
-		# for p,o in zip(self.outer_params, out):
+		# out = [o if o is not None else torch.zeros_like(p) for p,o in zip(self.upper_params,out)]
+		# for p,o in zip(self.upper_params, out):
 		# 	if p.grad is not None:
 		# 		p.grad  = p.grad + o
 		# 	else:
 		# 		p.grad = 1.*o
 		
-		# if self.outer_grad is not None:
-		# 	self.outer_grad = tuple([p+1.*o.grad for p,o in zip(self.outer_grad,self.outer_params)])
+		# if self.upper_grad is not None:
+		# 	self.upper_grad = tuple([p+1.*o.grad for p,o in zip(self.upper_grad,self.upper_params)])
 		# else:
-		# 	self.outer_grad = tuple([1.*p.grad for p in self.outer_params])
+		# 	self.upper_grad = tuple([1.*p.grad for p in self.upper_params])
 				
-		# for p, g in zip(self.outer_params,self.outer_grad):
+		# for p, g in zip(self.upper_params,self.upper_grad):
 		# 	p.grad = 1.*g
-		# self.outer_optimizer.step()
-		# self.outer_optimizer.zero_grad()
-		# self.outer_grad = None
+		# self.upper_optimizer.step()
+		# self.upper_optimizer.zero_grad()
+		# self.upper_grad = None
 
 		# self.amortized_grad = amortized_grad
 		
 		end_time_iter = time.time()
 		self.alg_time += end_time_iter-start_time_iter
-		metrics = { 'train_outer_loss': loss.item(),
-					'train_inner_loss': inner_loss.item(),
-					'train_outer_acc': 0.}
+		metrics = { 'train_upper_loss': loss.item(),
+					'train_lower_loss': lower_loss.item(),
+					'train_upper_acc': 0.}
 
 		return   metrics
 
 	def update_schedule(self):
-		if self.use_inner_scheduler:
-			self.inner_scheduler.step()
-		if self.use_outer_scheduler:
-			self.outer_scheduler.step()
+		if self.use_lower_scheduler:
+			self.lower_scheduler.step()
+		if self.use_upper_scheduler:
+			self.upper_scheduler.step()
 
 	def log_image(self,step):
-		if self.args.loss.objective.inner.name=='LogisticDistill':
-			x,_,y =self.outer_params
+		if self.args.loss.objective.lower.name=='LogisticDistill':
+			x,_,y =self.upper_params
 			self.log_artifacts({'image': x.cpu().detach().numpy(), 'label':y.cpu().detach().numpy()},step, art_type='arrays', tag='distilled_image')
 			N_h = 2
 			fig = make_and_save_grid_images(x.cpu().detach(), N_h=N_h,N_w=int(y.shape[0]/N_h))

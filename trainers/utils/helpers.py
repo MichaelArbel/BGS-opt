@@ -3,7 +3,6 @@ import torch
 import importlib
 import omegaconf
 import core.utils as utils
-from core import models
 #   Adapted from: https://github.com/AntheaL/bilevel_opt_code/blob/main/bilevel_opt/helpers.py
 
 
@@ -22,19 +21,19 @@ def import_module(module_name):
         module = importlib.import_module(module)
         return getattr(module, attr[1:])
     except:
-        module = import_module(module)
-        return getattr(module, attr[1:])
+        try:
+            module = import_module(module)
+            return getattr(module, attr[1:])
+        except:
+            return eval(module+attr[1:])
 
-
-def init_model(model, model_path,dtype, device, is_inner=True):
+def init_model(model, model_path,dtype, device, is_lower=True):
     if model_path:
         #state_dict_model = torch.load(model_path, map_location='cpu')
         #model = model.load_state_dict(state_dict_model).to('cpu')
         model = torch.load(model_path)
 
     model = utils.to_type(model, dtype)
-    if isinstance(model, models.MultiModel):
-        device = 'cpu'
     model = model.to(device)
 
     return model

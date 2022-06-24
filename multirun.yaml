@@ -109,17 +109,19 @@ hydra:
   overrides:
     hydra: []
     task:
-    - method=AmIGO
+    - selection=BGS
     - loss=multitask_cifar100
     - loader=multitask_cifar100
     - training=multitask_cifar100
+    - training.trainer_name=trainers.multitask.trainer_multitask_new_interface.Trainer
     - metrics=multitask_cifar100
     - system.dtype=32
-    - system.device=-1
+    - system.device=1
     - logs.log_name=debug
+    - loss.model.lower.name=trainers.multitask.models.models.VectMTLVGG16
   job:
     name: run
-    override_dirname: loader=multitask_cifar100,logs.log_name=debug,loss=multitask_cifar100,method=AmIGO,metrics=multitask_cifar100,system.device=-1,system.dtype=32,training=multitask_cifar100
+    override_dirname: loader=multitask_cifar100,logs.log_name=debug,loss.model.lower.name=trainers.multitask.models.models.VectMTLVGG16,loss=multitask_cifar100,metrics=multitask_cifar100,selection=BGS,system.device=1,system.dtype=32,training.trainer_name=trainers.multitask.trainer_multitask_new_interface.Trainer,training=multitask_cifar100
     id: ???
     num: ???
     config_name: config.yaml
@@ -132,12 +134,12 @@ hydra:
         exclude_keys: []
   runtime:
     version: 1.1.1
-    cwd: /home/marbel/Documents/projects/bilevel_opt_code/NonconvexBilevel
+    cwd: /home/marbel/Documents/projects/BGS-opt
     config_sources:
     - path: hydra.conf
       schema: pkg
       provider: hydra
-    - path: /home/marbel/Documents/projects/bilevel_opt_code/NonconvexBilevel/configs
+    - path: /home/marbel/Documents/projects/BGS-opt/configs
       schema: file
       provider: main
     - path: ''
@@ -147,7 +149,7 @@ hydra:
       training: multitask_cifar100
       loss: multitask_cifar100
       loader: multitask_cifar100
-      method: AmIGO
+      selection: BGS
       metrics: multitask_cifar100
       logs: default
       launcher: default
@@ -164,7 +166,7 @@ hydra:
       hydra/output: default
   verbose: false
 system:
-  device: -1
+  device: 1
   seed:
     torch: 0
     numpy: 0
@@ -207,33 +209,44 @@ logs:
   log_id: null
 metrics:
   disp_freq: 10
-  max_outer_iter: 1
-  max_inner_iter: 1
+  max_upper_iter: 1
+  max_lower_iter: 1
   epoch_eval: true
   log_artefacts_freq: 200
   log_artifacts: true
-  log_inner_cond: false
-  freq_inner_cond: 5000
+  log_lower_cond: false
+  freq_lower_cond: 5000
   eval_test: true
   name: multivalue
-method:
-  name: AmIGO
-  forward:
-    name: core.solvers.ForwardSolver
-    warm_start: true
-    n_iter: 1
-    increase_n_iter: false
-    fac_increase: 0
-  backward:
-    name: core.solvers.BackwardSolverSGD
-    warm_start: true
-    lr: 0.1
-    n_iter: 1
-    increase_n_iter: false
-    stochastic: false
-    tol: 1.0e-13
+selection:
+  name: BGS
+  optimizer:
+    optimizer:
+      name: TorchOpt.adam
+      b1: 0.9
+      b2: 0.999
+      eps: 1.0e-08
+      eps_root: 1.0e-08
+    scheduler:
+      name: TorchOpt.schedule.linear_schedule
+      init_value: 0.0003
+      end_value: 0.0003
+      transition_steps: 1
+      transition_begin: 0
+    warm_start_iter: 0
+    unrolled_iter: 1
+  linear_solver:
+    algorithm:
+      name: core.linear_solvers.SGD
+      lr: 1.0e-05
+      n_iter: 1
+    residual_op:
+      name: core.selection.NormalResidual
+    stochastic: true
+  correction: true
+  dual_var_warm_start: true
 loader:
-  loader: trainers.multitask.bindings.MutiTaskLoader
+  loader: trainers.multitask.loaders.MutiTaskLoader
   name: datasets.CIFAR100MTL
   b_size: 32
   eval_b_size: 32
@@ -242,46 +255,47 @@ loader:
   data_path: data/datasets
 loss:
   objective:
-    inner:
-      name: trainers.multitask.bindings.MutiTaskLoss
+    lower:
+      name: trainers.multitask.models.MutiTaskLoss
       weighted: true
       apply_reg: false
+      num_tasks: ${loader.num_tasks}
+    upper:
+      name: trainers.multitask.models.MutiTaskLoss
+      weighted: false
+      apply_reg: true
       reg: 0.0005
       num_tasks: ${loader.num_tasks}
-    outer:
-      name: trainers.multitask.bindings.MutiTaskLoss
-      weighted: false
-      num_tasks: ${loader.num_tasks}
   model:
-    inner:
-      name: trainers.multitask.bindings.models.VectMTLVGG16
+    lower:
+      name: trainers.multitask.models.models.VectMTLVGG16
       num_tasks: ${loader.num_tasks}
       path: ''
-    outer:
-      name: core.models.Identity
+    upper:
+      name: trainers.multitask.models.Identity
       dim: ${loader.num_tasks}
       init: 0.1
       path: ''
 training:
-  outer_iterations: 100
+  upper_iterations: 100
   total_epoch: 200
   by_epoch: true
-  trainer_name: trainers.multitask.trainer_multitask.Trainer
+  trainer_name: trainers.multitask.trainer_multitask_new_interface.Trainer
   optimizer:
-    outer:
-      name: torch.optim.Adam
-      lr: 0.0003
-    inner:
+    upper:
       name: torch.optim.SGD
       lr: 0.1
+      weight_decay: 0.0
       momentum: 0.9
-      weight_decay: 0.0005
+    lower:
+      name: torch.optim.Adam
+      lr: 0.0003
   scheduler:
-    outer:
+    lower:
       name: torch.optim.lr_scheduler.CosineAnnealingLR
       T_max: 1000
       use_scheduler: false
-    inner:
+    upper:
       name: torch.optim.lr_scheduler.CosineAnnealingLR
       T_max: ${training.total_epoch}
       use_scheduler: true

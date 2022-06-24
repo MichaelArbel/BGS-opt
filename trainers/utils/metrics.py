@@ -68,29 +68,23 @@ def value(func,loader,func_args, max_iter, prefix, device, dtype):
 	accuracy = 0
 	counter = 0
 	args = inspect.getfullargspec(func)[0]
-	func.eval()
-	def eval_func(data,value, accuracy,counter):
-		if len(data)==1 and isinstance(data, list):
-			data = data[0]
-		data = utils.to_device(data,device,dtype)
-		counter += 1
-		if 'with_acc' in args:
-			loss,acc = func(data,with_acc=True,**func_args)
-		else:
-			loss = func(data,**func_args)
-			acc = 0
-		value = value + loss
-		accuracy = accuracy + acc
-		return value, accuracy, counter
 
 	with torch.no_grad():
-		if max_iter>0:
-			while counter < max_iter:
-				data = next(loader)
-				value, accuracy,counter = eval_func(data, value, accuracy,counter)
-		else:
-			for data in loader:
-				value, accuracy,counter = eval_func(data, value, accuracy,counter)
+		for data in loader:
+			if counter > max_iter and max_iter>0:
+				break
+			#if len(data)==1 and isinstance(data, list):
+			#	data = data[0]
+			data = utils.to_device(data,device,dtype)
+			counter += 1
+			if 'with_acc' in args:
+				loss,acc = func(data,with_acc=True,**func_args)
+			else:
+				loss = func(data,**func_args)
+				acc = 0
+			value = value + loss
+			accuracy = accuracy + acc
+
 		
 	accuracy = accuracy/counter
 	value = value/counter
@@ -99,7 +93,6 @@ def value(func,loader,func_args, max_iter, prefix, device, dtype):
 	else:
 
 		out_dict = {prefix+'_loss': value.item()}
-	func.train()
 	return out_dict
 
 
@@ -112,35 +105,19 @@ def multivalue(func,loader,func_args, max_iter, prefix, device, dtype):
 	counter = 0
 	all_values = 0
 	all_accuracy = 0
-	args = inspect.getfullargspec(func)[0]
-	func.eval()
-
-
-	def eval_func(data,value, all_values, accuracy, all_accuracy, counter):
-		if len(data)==1 and isinstance(data, list):
-			data = data[0]
-		data = utils.to_device(data,device,dtype)
-		counter += 1
-		loss,losses,acc,all_acc = func(data,with_acc=True,all_losses=True,**func_args)
-		# else:
-		# 	loss,losses = func(data,all_losses=True,**func_args)
-		# 	acc = 0
-		# 	all_acc = 0
-		value = value + loss
-		all_values = all_values+ losses
-		accuracy = accuracy + acc
-		all_accuracy = all_accuracy + all_acc
-		return value, all_values, accuracy, all_accuracy, counter
-
 	with torch.no_grad():
-		if max_iter>0:
-			while counter < max_iter:
-				data = next(loader)
-				value, all_values, accuracy, all_accuracy, counter = eval_func(data, value, all_values, accuracy, all_accuracy, counter)
-		else:
-			for data in loader:
-				value, all_values, accuracy, all_accuracy, counter = eval_func(data, value, all_values, accuracy, all_accuracy, counter)
-
+		for data in loader:
+			if counter > max_iter and max_iter>0:
+				break
+			#if len(data)==1 and isinstance(data, list):
+			#	data = data[0]
+			data = utils.to_device(data,device,dtype)
+			counter += 1
+			loss,losses,acc,all_acc = func(data,with_acc=True,all_losses=True,**func_args)
+			value = value + loss
+			all_values = all_values+ losses
+			accuracy = accuracy + acc
+			all_accuracy = all_accuracy + all_acc
 	accuracy = accuracy/counter
 	value = value/counter
 	all_accuracy = all_accuracy/counter
@@ -153,7 +130,6 @@ def multivalue(func,loader,func_args, max_iter, prefix, device, dtype):
 	out_dict.update({prefix+'_acc_all': 100*accuracy.item()})
 	all_accuracy = torch.chunk(all_accuracy,all_accuracy.shape[0],dim=0)
 	out_dict.update({prefix+'_acc_task_'+str(i): 100*acc.item() for i,acc in enumerate(all_accuracy)})
-	func.train()
 	return out_dict
 
 

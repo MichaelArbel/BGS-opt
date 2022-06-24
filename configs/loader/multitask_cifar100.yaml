@@ -1,6 +1,6 @@
 # @package loader
 
-loader: 'trainers.multitask.bindings.MutiTaskLoader'
+loader: 'trainers.multitask.loaders.MutiTaskLoader'
 name : 'datasets.CIFAR100MTL'
 b_size : 32
 eval_b_size: 32

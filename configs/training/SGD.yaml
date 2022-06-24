@@ -1,23 +1,23 @@
 # @package training
-outer_iterations: 100
+upper_iterations: 100
 
 optimizer:
-  outer:
+  upper:
     name: 'torch.optim.SGD'
     lr : 0.01
     momentum: 0.
     nesterov: False
-  inner:
+  lower:
     name: 'torch.optim.SGD'
     lr : 0.01
     momentum: 0.
     nesterov: False
 scheduler:
-  outer:
+  upper:
     name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
     T_max: 1000
     use_scheduler: False
-  inner:
+  lower:
     name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
     T_max: 1000
     use_scheduler: False
