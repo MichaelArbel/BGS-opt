@@ -10,12 +10,28 @@ from torchvision import transforms
 import torch.nn.functional as F
 import pickle as pkl
 
+import numpy as np
+import signal
+
+class ConcatIndexedDatasets(torch.utils.data.Dataset):
+    def __init__(self, datasets):
+        self.datasets = datasets
+        self.len = np.max(np.array([len(d)for d, ind in self.datasets]))
+    def __getitem__(self, i):
+        return tuple([(d[i%len(d)],ind) for d, ind in self.datasets])
+
+    def __len__(self):
+        return self.len
+
 class MutiTaskLoader(Loader):
 	def __init__(self,num_workers,dtype,device,**args):
 		super(MutiTaskLoader,self).__init__(num_workers,dtype,device,**args)
 		self.make_loaders()
 	def load_data(self,b_size):
 		return data_multitask(self.args,b_size, self.dtype, self.device, self.num_workers)
+
+
+
 
 
 def augmentations(name, dataset_type='train'):
@@ -68,25 +84,24 @@ def data_multitask(args,b_size,dtype, device, num_workers):
 			pkl.dump(all_data,f)
 
 
-	loader_kwargs = {'shuffle':True, 'num_workers':2, 'pin_memory': True}
+	Cat_dataset_train = ConcatIndexedDatasets(train_data)
+	Cat_dataset_test  = ConcatIndexedDatasets(test_data)
 
-
-
-	train_loaders 	 = [RingIterator(torch.utils.data.DataLoader(dataset=data, batch_size=b_size, **loader_kwargs),
-										index=i) for (data,i) in train_data ]
-	test_loaders 	 = [RingIterator(torch.utils.data.DataLoader(dataset=data, batch_size=b_size, **loader_kwargs),
-										index=i) for (data,i) in test_data ]
-
-	if subset_id>=0:
-		val_loaders  = [RingIterator(torch.utils.data.DataLoader(dataset=train_data[subset_id][0], batch_size=b_size, **loader_kwargs),
-										index=subset_id)]
+	if subset_id >=0:
+		Cat_dataset_val   =  ConcatIndexedDatasets([train_data[subset_id]])
 	else:
-		train_loaders = [RingIterator(torch.utils.data.DataLoader(dataset=data, batch_size=b_size, **loader_kwargs),
-										index=i) for (data,i) in train_data ]
+		Cat_dataset_val   =  ConcatIndexedDatasets(train_data)
 
-	train_loaders 	 = RingIteratorList(train_loaders)
-	val_loaders 	 = RingIteratorList(val_loaders)
-	test_loaders 	 = RingIteratorList(test_loaders)
+	def worker_init(x):
+		signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+	loader_kwargs = {'shuffle':True, 'num_workers':4, 'pin_memory': True, 'worker_init_fn':worker_init}
+
+
+
+	train_loaders = torch.utils.data.DataLoader(dataset=Cat_dataset_train, batch_size=b_size, **loader_kwargs)
+	test_loaders = torch.utils.data.DataLoader(dataset=Cat_dataset_test, batch_size=b_size, **loader_kwargs)
+	val_loaders = torch.utils.data.DataLoader(dataset=Cat_dataset_val, batch_size=b_size, **loader_kwargs)
 
 	data = {'lower_loader':train_loaders,
 		 'upper_loader':val_loaders,
@@ -96,42 +111,6 @@ def data_multitask(args,b_size,dtype, device, num_workers):
 	meta_data = {'num_tasks': num_tasks, 
 				 'subset_id': subset_id, 
 				 'total_samples': len(train_data[0][0]),
-				 'b_size': b_size }
-	one_data_path = os.path.join(work_dir,data_path,name+'_one_data.pkl')
-	try:
-		with open(one_data_path,'rb') as f:
-			all_data = pkl.load(f)
-			one_train_data,one_val_data,one_test_data = all_data
-	except:
-		one_train_data = next(train_loaders)
-		one_val_data = (one_train_data[subset_id],)
-		one_test_data = next(test_loaders)
-		all_data = one_train_data,one_val_data,one_test_data
-		with open(one_data_path,'wb') as f:
-			pkl.dump(all_data,f)
-
-	one_data_train_loader = [RingIterator([data[0]],
-										index=data[1]) for data in one_train_data ]
-	one_data_train_loader = RingIteratorList(one_data_train_loader)
-
-
-	one_data_val_loader = [RingIterator([data[0]],
-										index=data[1]) for data in one_val_data ]
-	one_data_val_loader = RingIteratorList(one_data_val_loader)
-
-
-	one_data_test_loader = [RingIterator([data[0]],
-										index=data[1]) for data in one_test_data ]
-	one_data_test_loader = RingIteratorList(one_data_test_loader)
-
-	data = {'lower_loader':one_data_train_loader,
-		 'upper_loader':one_data_val_loader,
-		 'test_upper_loader': one_data_test_loader,
-		 'test_lower_loader': None,
-		}
-	meta_data = {'num_tasks': num_tasks, 
-				 'subset_id': subset_id, 
-				 'total_samples': b_size,
 				 'b_size': b_size }
 
 	return data, meta_data

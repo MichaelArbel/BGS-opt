@@ -17,6 +17,7 @@ def main(cfg: DictConfig) -> None:
     try:
         create(cfg)
     except Exception as e:
+        print('No job launched')
         logger.critical(e, exc_info=True)
 
 

@@ -1,7 +1,0 @@
-# @package loader
-loader: 'trainers.utils.loaders.TV_ClassifLoader'
-name : 'CIFAR10'
-b_size : 1000
-eval_b_size: 1000
-val_size_ratio : 0.5
-data_path : 'data/datasets'

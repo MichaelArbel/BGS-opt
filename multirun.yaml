@@ -109,19 +109,24 @@ hydra:
   overrides:
     hydra: []
     task:
-    - selection=BGS
-    - loss=multitask_cifar100
-    - loader=multitask_cifar100
-    - training=multitask_cifar100
-    - training.trainer_name=trainers.multitask.trainer_multitask_new_interface.Trainer
-    - metrics=multitask_cifar100
     - system.dtype=32
-    - system.device=1
-    - logs.log_name=debug
-    - loss.model.lower.name=trainers.multitask.models.models.VectMTLVGG16
+    - system.device=-1
+    - launcher=besteffort
+    - launcher.app=/scratch/clear/marbel/anaconda3/bin/python
+    - launcher.gpumem=14
+    - launcher.hours=17
+    - cluster.name=
+    - logs.log_name=multitask_cifar100_new
+    - training=multitask_cifar100
+    - training.resume=True
+    - training.trainer_name=trainers.multitask.trainer_multitask_new_interface.Trainer
+    - training.lower.selection.correction=True
+    - training.lower.selection.linear_solver.residual_op.name=core.selection.NormalResidual
+    - training.lower.selection.optimizer.lr=0.01,0.001
+    - training.upper.clip=True
   job:
-    name: run
-    override_dirname: loader=multitask_cifar100,logs.log_name=debug,loss.model.lower.name=trainers.multitask.models.models.VectMTLVGG16,loss=multitask_cifar100,metrics=multitask_cifar100,selection=BGS,system.device=1,system.dtype=32,training.trainer_name=trainers.multitask.trainer_multitask_new_interface.Trainer,training=multitask_cifar100
+    name: launch_jobs
+    override_dirname: cluster.name=,launcher.app=/scratch/clear/marbel/anaconda3/bin/python,launcher.gpumem=14,launcher.hours=17,launcher=besteffort,logs.log_name=multitask_cifar100_new,system.device=-1,system.dtype=32,training.lower.selection.correction=True,training.lower.selection.linear_solver.residual_op.name=core.selection.NormalResidual,training.lower.selection.optimizer.lr=0.01,0.001,training.resume=True,training.trainer_name=trainers.multitask.trainer_multitask_new_interface.Trainer,training.upper.clip=True,training=multitask_cifar100
     id: ???
     num: ???
     config_name: config.yaml
@@ -147,12 +152,8 @@ hydra:
       provider: schema
     choices:
       training: multitask_cifar100
-      loss: multitask_cifar100
-      loader: multitask_cifar100
-      selection: BGS
-      metrics: multitask_cifar100
       logs: default
-      launcher: default
+      launcher: besteffort
       cluster: OAR
       system: default
       hydra/env: default
@@ -166,7 +167,7 @@ hydra:
       hydra/output: default
   verbose: false
 system:
-  device: 1
+  device: -1
   seed:
     torch: 0
     numpy: 0
@@ -183,119 +184,100 @@ cluster:
   user: ${env:USER}
   engine: OAR
   shell:
-    bin_path: /usr/bin/zsh
-    config_path: ~/.zshrc
+    bin_path: /bin/bash
+    config_path: ~/.bashrc
   directive: '#OAR'
   cleanup: source gpu_setVisibleDevices.sh
   cmd: oarsub -S
-  launchers: default
+  launchers: ${launcher.name}
   conda_env: ${env:CONDA_DEFAULT_ENV}
-  name: thoth
+  name: ''
 launcher:
-  name: default
+  name: besteffort
   filename: ${launcher.name}.sh
-  hours: 12
+  hours: 17
   gpumodel: null
-  gpumem: null
-  besteffort: false
-  idempotent: false
+  gpumem: 14
+  besteffort: true
+  idempotent: true
   cmd: run.py
+  app: /scratch/clear/marbel/anaconda3/bin/python
   nodes: 1
   cpus: 1
 logs:
   log_dir: data/outputs
-  log_name: debug
+  log_name: multitask_cifar100_new
   log_to_file: false
   log_id: null
-metrics:
-  disp_freq: 10
-  max_upper_iter: 1
-  max_lower_iter: 1
-  epoch_eval: true
-  log_artefacts_freq: 200
-  log_artifacts: true
-  log_lower_cond: false
-  freq_lower_cond: 5000
-  eval_test: true
-  name: multivalue
-selection:
-  name: BGS
-  optimizer:
-    optimizer:
-      name: TorchOpt.adam
-      b1: 0.9
-      b2: 0.999
-      eps: 1.0e-08
-      eps_root: 1.0e-08
-    scheduler:
-      name: TorchOpt.schedule.linear_schedule
-      init_value: 0.0003
-      end_value: 0.0003
-      transition_steps: 1
-      transition_begin: 0
-    warm_start_iter: 0
-    unrolled_iter: 1
-  linear_solver:
-    algorithm:
-      name: core.linear_solvers.SGD
-      lr: 1.0e-05
-      n_iter: 1
-    residual_op:
-      name: core.selection.NormalResidual
-    stochastic: true
-  correction: true
-  dual_var_warm_start: true
-loader:
-  loader: trainers.multitask.loaders.MutiTaskLoader
-  name: datasets.CIFAR100MTL
-  b_size: 32
-  eval_b_size: 32
-  num_tasks: 20
-  subset_id: 0
-  data_path: data/datasets
-loss:
-  objective:
-    lower:
-      name: trainers.multitask.models.MutiTaskLoss
-      weighted: true
-      apply_reg: false
-      num_tasks: ${loader.num_tasks}
-    upper:
+training:
+  trainer_name: trainers.multitask.trainer_multitask_new_interface.Trainer
+  total_epoch: 200
+  resume: true
+  metrics:
+    disp_freq: 10
+    max_upper_iter: 1
+    max_lower_iter: 1
+    epoch_eval: true
+    log_artefacts_freq: 200
+    log_artifacts: true
+    log_lower_cond: false
+    freq_lower_cond: 5000
+    eval_test: true
+    name: multivalue
+  loader:
+    loader: trainers.multitask.loaders.MutiTaskLoader
+    name: datasets.CIFAR100MTL
+    b_size: 32
+    eval_b_size: 32
+    num_tasks: 20
+    subset_id: 0
+    data_path: data/datasets
+  upper:
+    objective:
       name: trainers.multitask.models.MutiTaskLoss
       weighted: false
-      apply_reg: true
-      reg: 0.0005
-      num_tasks: ${loader.num_tasks}
-  model:
-    lower:
-      name: trainers.multitask.models.models.VectMTLVGG16
-      num_tasks: ${loader.num_tasks}
-      path: ''
-    upper:
+      apply_reg: false
+      num_tasks: ${training.loader.num_tasks}
+    model:
       name: trainers.multitask.models.Identity
-      dim: ${loader.num_tasks}
+      dim: ${training.loader.num_tasks}
       init: 0.1
       path: ''
-training:
-  upper_iterations: 100
-  total_epoch: 200
-  by_epoch: true
-  trainer_name: trainers.multitask.trainer_multitask_new_interface.Trainer
-  optimizer:
-    upper:
-      name: torch.optim.SGD
-      lr: 0.1
-      weight_decay: 0.0
-      momentum: 0.9
-    lower:
+    optimizer:
       name: torch.optim.Adam
       lr: 0.0003
-  scheduler:
-    lower:
-      name: torch.optim.lr_scheduler.CosineAnnealingLR
-      T_max: 1000
+    scheduler:
       use_scheduler: false
-    upper:
-      name: torch.optim.lr_scheduler.CosineAnnealingLR
-      T_max: ${training.total_epoch}
-      use_scheduler: true
+    clip: true
+    max_norm: 1.0
+  lower:
+    objective:
+      name: trainers.multitask.models.MutiTaskLoss
+      weighted: true
+      apply_reg: true
+      reg: 0.0005
+      num_tasks: ${training.loader.num_tasks}
+    model:
+      name: trainers.multitask.models.models.VectMTLVGG16
+      num_tasks: ${training.loader.num_tasks}
+    selection:
+      warm_start_iter: 1
+      unrolled_iter: 0
+      correction: true
+      dual_var_warm_start: true
+      optimizer:
+        name: TorchOpt.sgd
+        momentum: 0.9
+        lr: 0.1
+      scheduler:
+        name: torch.optim.lr_scheduler.CosineAnnealingLR
+        T_max: ${training.total_epoch}
+        use_scheduler: true
+      linear_solver:
+        algorithm:
+          name: core.linear_solvers.SGD
+          lr: 0.001
+          n_iter: 1
+        residual_op:
+          name: core.selection.NormalResidual
+        stochastic: true

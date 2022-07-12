@@ -1,24 +1,93 @@
 # @package training
-upper_iterations: 100
-total_epoch: 200
-by_epoch: True
-trainer_name: 'trainers.multitask.trainer_multitask.Trainer'
 
-optimizer:
-  upper:
-    name: 'torch.optim.SGD'
-    lr : 0.1
-    weight_decay: 0.
-    momentum: 0.9
-  lower:
+
+trainer_name: 'trainers.multitask.trainer_multitask.Trainer'
+total_epoch: 200
+resume: False
+
+
+metrics:
+  disp_freq: 10
+  max_upper_iter: 1
+  max_lower_iter : 1
+  epoch_eval: True
+  log_artefacts_freq: 200
+  log_artifacts: True
+  log_lower_cond: False
+  freq_lower_cond: 5000
+  eval_test: True
+  name: 'multivalue'
+
+
+loader:
+  loader: 'trainers.multitask.loaders.MutiTaskLoader'
+  name : 'datasets.CIFAR100MTL'
+  b_size : 32
+  eval_b_size: 32
+  num_tasks: 20
+  subset_id: 0
+  data_path : 'data/datasets'
+
+upper:
+  objective:
+    name: 'trainers.multitask.models.MutiTaskLoss'
+    weighted: False
+    apply_reg: False
+    num_tasks : ${training.loader.num_tasks} 
+  model:
+    name: 'trainers.multitask.models.Identity'
+    dim: ${training.loader.num_tasks}
+    init: 0.1
+    path: ''
+  optimizer:
     name: 'torch.optim.Adam'
     lr : 0.0003
-scheduler:
-  lower:
-    name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
-    T_max: 1000
+  scheduler:
     use_scheduler: False
-  upper:
-    name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
-    T_max: ${training.total_epoch}
-    use_scheduler: True
+  clip: False
+  max_norm: 1.
+
+
+lower:
+  objective:
+    name: 'trainers.multitask.models.MutiTaskLoss'
+    weighted: True
+    apply_reg: True
+    reg: 0.0005
+    num_tasks: ${training.loader.num_tasks}
+  model:
+    name: 'trainers.multitask.models.models.VectMTLVGG16'
+    num_tasks : ${training.loader.num_tasks}
+
+  selection:
+    warm_start_iter : 1
+    unrolled_iter: 0
+    correction: True
+    dual_var_warm_start: True
+    
+    optimizer:
+      name: 'TorchOpt.sgd'
+      momentum: 0.9
+      lr: 0.1
+      # name: 'TorchOpt.adam'
+      # b1 : 0.9
+      # b2: 0.999
+      # eps: 0.00000001
+      # eps_root: 0.00000001
+    scheduler:
+      name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
+      T_max: ${training.total_epoch}
+      use_scheduler: True
+    linear_solver:
+      algorithm:
+        name: 'core.linear_solvers.SGD'
+        lr: 0.001
+        n_iter: 1
+      residual_op: 
+        name: 'core.selection.FiniteDiffResidual'
+      stochastic: True
+
+
+
+
+

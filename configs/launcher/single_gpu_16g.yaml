@@ -1,4 +1,4 @@
-# @package _group_
+# @package launcher
 name: "single_gpu_16g"
 gpus: 1
 filename: "${launcher.name}.slurm"

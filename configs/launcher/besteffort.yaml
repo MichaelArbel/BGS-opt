@@ -1,4 +1,4 @@
-# @package _group_
+# @package launcher
 name: "besteffort"
 filename: "${launcher.name}.sh"
 hours: 10
@@ -7,3 +7,6 @@ gpumem: null
 besteffort: True
 idempotent: True
 cmd: "run.py"
+app: "python"
+nodes: 1
+cpus: 1

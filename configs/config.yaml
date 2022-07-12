@@ -1,13 +1,9 @@
 defaults:
-  - system : default 
-  - cluster: OAR
+  - system : default
+  - cluster : OAR
   - launcher: default
   - logs: default
-  - metrics: default
-  - selection : BGS
-  - loader : zeros
-  - loss: kernel_ridge
-  - training: SGD
+  - training: multitask_cifar100
 
 hydra:
   output_subdir: null

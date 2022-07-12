@@ -1,8 +1,0 @@
-# @package loader
-
-loader: 'trainers.utils.loaders.DefaultLoader'
-name : '20newsgroups'
-b_size : 100
-eval_b_size: 2000
-val_size_ratio : 0.5
-data_path : 'data/datasets'

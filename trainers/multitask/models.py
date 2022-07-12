@@ -27,7 +27,7 @@ class MutiTaskLoss(nn.Module):
 		self.apply_reg= apply_reg
 		self.num_tasks = num_tasks
 	def format_data(self,data):
-		tasks = torch.cat([d[1].repeat(d[0][0].shape[0]) for d in data],dim=0)
+		tasks = torch.cat([d[1] for d in data],dim=0).long()
 		tasks_onehot = torch.nn.functional.one_hot(tasks, num_classes=self.num_tasks)
 		tasks_onehot  = utils.to_type(tasks_onehot,data[0][0][0].dtype)
 		all_x = torch.cat([d[0][0] for d in data],dim=0)
