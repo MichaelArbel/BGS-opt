@@ -15,10 +15,10 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 import hydra
 import dill as pkl
 
-print("Is cuda available?")
+print("Check if cuda available: ")
 print(torch.cuda.is_available())
 
-print("working dir: ")
+print("Working dir: ")
 print(os.getcwd())
 
 #print(torch.cuda.current_device())

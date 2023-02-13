@@ -1,7 +1,7 @@
 # @package training
 
 
-trainer_name: 'trainers.multitask.trainer_multitask.Trainer'
+trainer_name: 'examples.multitask.trainer.Trainer'
 total_epoch: 200
 resume: False
 
@@ -20,7 +20,6 @@ metrics:
 
 
 loader:
-  loader: 'trainers.multitask.loaders.MutiTaskLoader'
   name : 'datasets.CIFAR100MTL'
   b_size : 32
   eval_b_size: 32
@@ -30,62 +29,38 @@ loader:
 
 upper:
   objective:
-    name: 'trainers.multitask.models.MutiTaskLoss'
+    name: 'examples.multitask.models.MutiTaskLoss'
     weighted: False
     apply_reg: False
     num_tasks : ${training.loader.num_tasks} 
   model:
-    name: 'trainers.multitask.models.Identity'
+    name: 'examples.multitask.models.Identity'
     dim: ${training.loader.num_tasks}
     init: 0.1
     path: ''
   optimizer:
     name: 'torch.optim.Adam'
     lr : 0.0003
+    weight_decay: 0.
   scheduler:
+    name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
+    T_max: ${training.total_epoch}
     use_scheduler: False
   clip: False
   max_norm: 1.
-
+ 
 
 lower:
   objective:
-    name: 'trainers.multitask.models.MutiTaskLoss'
+    name: 'examples.multitask.models.MutiTaskLoss'
     weighted: True
     apply_reg: True
     reg: 0.0005
     num_tasks: ${training.loader.num_tasks}
   model:
-    name: 'trainers.multitask.models.models.VectMTLVGG16'
+    name: 'examples.multitask.models.networks.VectMTLVGG16'
     num_tasks : ${training.loader.num_tasks}
 
-  selection:
-    warm_start_iter : 1
-    unrolled_iter: 0
-    correction: True
-    dual_var_warm_start: True
-    
-    optimizer:
-      name: 'TorchOpt.sgd'
-      momentum: 0.9
-      lr: 0.1
-      # name: 'TorchOpt.adam'
-      # b1 : 0.9
-      # b2: 0.999
-      # eps: 0.00000001
-      # eps_root: 0.00000001
-    scheduler:
-      name: 'torch.optim.lr_scheduler.CosineAnnealingLR'
-      T_max: ${training.total_epoch}
-      use_scheduler: True
-    linear_solver:
-      algorithm:
-        name: 'core.linear_solvers.SGD'
-        lr: 0.001
-        n_iter: 1
-      residual_op: 
-        name: 'core.selection.FiniteDiffResidual'
-      stochastic: True
 
 
 

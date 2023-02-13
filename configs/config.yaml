@@ -4,7 +4,7 @@ defaults:
   - launcher: default
   - logs: default
   - training: multitask_cifar100
-
+  - selection: BGS
 hydra:
   output_subdir: null
   run:

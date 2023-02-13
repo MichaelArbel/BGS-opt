@@ -1,38 +1,50 @@
-import  torch 
-from torch.autograd import Variable
-import torch.nn as nn
-from torch import autograd
-from core.utils import grad_with_none, grad_unused_zero
-import core.utils as utils
-from core.utils import Config
-import higher
-from torch.autograd import grad as torch_grad
-import copy
+import torch 
 import numpy as np
 
-import time
-from functools import partial
-import functorch
-import TorchOpt
-from itertools import cycle
-
+from utils.helpers import get_gpu_usage
 
 
 class LinearSolverAlg(object):
 	def __call__(self,res_op,init):
 		raise NotImplementedError
-class SGD(LinearSolverAlg):
+class GD(LinearSolverAlg):
+	## performs gd/sgd on quadratic loss 0.5 xAx+bx 
 	def __init__(self,lr=0.1,n_iter=1):
-		super(SGD,self).__init__()
+		super(GD,self).__init__()
 		self.n_iter= n_iter
 		self.lr= lr
-	def __call__(self,res_op,init):
-		sol = init
+	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+		out_lower = init
 		for i in range(self.n_iter):
-			vhp,out = res_op(sol)
-			sol = [ ag - self.lr*g if g is not None else 1.*ag for ag,g in zip(sol,vhp)]
-		return sol,out
+			out_upper, update = linear_op(out_lower)
+			out_lower = tuple([ x - self.lr*(ax+b) if ax is not None else x - self.lr*b for x,ax,b in zip(out_lower,update,b_vector)])
+		if compute_latest:
+			out_upper,_ = linear_op(out_lower,retain_graph=False, which='upper')
+		return out_upper,out_lower
 
+class Normal_GD(LinearSolverAlg):
+	## performs gd/sgd on normal loss 0.5 || Ax+b||^2
+	def __init__(self,lr=0.1,n_iter=1):
+		super(Normal_GD,self).__init__()
+		self.n_iter= n_iter
+		self.lr= lr
+	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+		out_lower = init
+		if linear_op.stochastic:
+			retain_graph = False
+		else:
+			retain_graph = True
+		for i in range(self.n_iter):
+			out_upper, update = linear_op(out_lower,retain_graph=retain_graph)
+			update = tuple([ax+b if ax is not None else b for ax,b in zip(update,b_vector)])
+			if i == self.n_iter-1 and not compute_latest:
+				retain_graph = False
+			out_upper, update = linear_op(update,retain_graph=retain_graph)
+			out_lower = tuple([ x - self.lr*ax if ax is not None else x  for x,ax in zip(out_lower,update)])
+		if compute_latest:
+			out_upper,_ = linear_op(out_lower,retain_graph=False, which='upper')
+
+		return out_upper,out_lower
 
 
 # class MinresQLP(LinearSolverAlg):
