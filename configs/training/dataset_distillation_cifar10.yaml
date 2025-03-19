@@ -1,10 +1,10 @@
 trainer_name: 'examples.datasetdistillation.trainer.Trainer'
-total_epoch: 200
+total_epoch: 40000
 resume: False
 
 
 metrics:
-  disp_freq: 10
+  disp_freq: 1
   max_upper_iter: 1
   max_lower_iter : 1
   epoch_eval: True
@@ -18,7 +18,7 @@ metrics:
 
 loader:
   name : 'CIFAR10'
-  b_size : 1000
+  b_size : 1024
   eval_b_size: 1000
   data_path : 'data/datasets'
   n_classes: 10

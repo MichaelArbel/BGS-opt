@@ -14,7 +14,6 @@ from examples.toy import models
 
 class Trainer:
 	def __init__(self, args, logger):
-		super(Trainer, self).__init__(args)
 		self.args = args
 		self.logger=  logger
 		self.device = hp.assign_device(args.system.device)
@@ -36,7 +35,6 @@ class Trainer:
 
 		# create data loaders for lower and upper problems
 		
-		self.timer(self.counter, " loading data " )
 		self.loaders, self.meta_data = make_loaders(self.args.training.loader,
 									num_workers=self.args.system.num_workers,
 									dtype=self.dtype,
@@ -47,64 +45,47 @@ class Trainer:
 		# create either a pytorch Module or a list of parameters
 
 
-		self.timer(self.counter, " creating lower model " )
 		
 		training_arg = self.args.training
-		lower_model_path = training_arg.lower.model.pop("path", None)
-		self.lower_model = hp.config_to_instance(**training_arg.lower.model)
-		self.lower_model = hp.init_model(self.lower_model,lower_model_path,
-										self.dtype, 
-										self.device
-										)
+										
 
-		self.timer(self.counter, " creating upper model " )
-		upper_model_path = training_arg.upper.model.pop("path", None)
-		self.upper_model = hp.config_to_instance(**training_arg.upper.model)
-		self.upper_model = hp.init_model(self.upper_model,upper_model_path,
-										self.dtype, 
-										self.device
-										)
+		# create both upper and lower objectives 
+		self.upper_var = tuple([torch.nn.parameter.Parameter(.00000001*torch.ones([training_arg.upper.model.dim],dtype=self.dtype))])
+		self.lower_var = tuple([torch.nn.parameter.Parameter(.00000001*torch.ones([training_arg.lower.model.dim],dtype=self.dtype))])
 
-		self.lower_var = tuple(self.lower_model.parameters())
-		self.upper_var = tuple(self.upper_model.parameters())
+		#qprint(lol)
 
-		# create a pytorch Modules whose output is a scalar
-		self.timer(self.counter, " creating losses " )
-
-		self.lower_loss_module = models.QuadyLinx(self.upper_model,self.lower_model,
+		self.lower_loss_module = models.LowerLoss(self.upper_var,self.lower_var,
 												cond=self.args.training.lower.objective.cond, 
-												device=self.device,swap=False, 
-												params_system=None, with_sin= self.args.training.lower.objective.with_sin)
+												device=self.device)
 
-		self.upper_loss_module = models.QuadyLinx(self.upper_model,self.lower_model,
+		self.upper_loss_module = models.UpperLoss(self.upper_var,self.lower_var,
 													cond=self.args.training.upper.objective.cond, 
-													device=self.device,swap=True, 
-													params_system=self.lower_loss_module.get_param_system())
+													device=self.device,
+													inner_loss_system=self.lower_loss_module.get_param_system())
+		
 		## Make the loss modules functional
 		self.lower_loss = Functional(self.lower_loss_module)
 		self.upper_loss = Functional(self.upper_loss_module)
 
 
-		self.timer(self.counter, " creating optimizers " )
 
 		self.upper_optimizer = hp.config_to_instance(params=self.upper_var, **training_arg.upper.optimizer)
 		self.use_upper_scheduler = training_arg.upper.scheduler.pop("use_scheduler", None)
 		if self.use_upper_scheduler:
 			self.upper_scheduler = hp.config_to_instance(optimizer=self.upper_optimizer, **training_arg.upper.scheduler)
 		
-		#Construct the selection
-		self.check_config()
+		#Construct the selection: a differentiable module that returns the solution of the lower-problem
 		self.selection = make_selection(self.lower_loss,
 									self.lower_var,
 									self.lower_loader,
-									self.args.selection,
+									self.args.algorithm,
 									self.device,
 									self.dtype)
 
 
 		self.count_max, self.total_batches = self.set_count_max()
 
-		self.timer(self.counter, " creating metrics " )
 
 		self.metrics = Metrics(training_arg.metrics,self.device,self.dtype)
 		name = training_arg.metrics.name
@@ -142,7 +123,6 @@ class Trainer:
 			self.update_schedule()
 			metrics = self.disp_metrics()
 			self.epoch += 1
-
 
 	def zero_grad(self):
 		self.upper_optimizer.zero_grad()
@@ -197,15 +177,10 @@ class Trainer:
 		self.logger.log_metrics(metrics, log_name="metrics")		
 		disp_keys = ['epoch','iter','time','train_upper_loss', 'train_lower_loss', 'test_upper_loss','upper_grad_norm','dual_var_norm' ]
 		try:
-			self.timer(self.counter, str({k:metrics[k] for k in disp_keys}))
+			print(metrics)
 		except:
 			pass
 		return metrics
-
-	def check_config(self):
-
-		if self.args.selection.optimizer.momentum==0.:
-			self.args.selection.optimizer.momentum=None
 
 	def set_count_max(self):
 		total_batches = 1

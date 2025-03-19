@@ -38,7 +38,6 @@ class Trainer:
 
 		# create data loaders for lower and upper problems
 		
-		self.timer(self.counter, " loading data " )
 		self.loaders, self.meta_data = make_loaders(self.args.training.loader,
 									num_workers=self.args.system.num_workers,
 									dtype=self.dtype,
@@ -49,7 +48,6 @@ class Trainer:
 		# create either a pytorch Module or a list of parameters
 
 
-		self.timer(self.counter, " creating lower model " )
 		
 		training_arg = self.args.training
 		lower_model_path = training_arg.lower.model.pop("path", None)
@@ -60,7 +58,6 @@ class Trainer:
 										self.device
 										)
 
-		self.timer(self.counter, " creating upper model " )
 		upper_model_path = training_arg.upper.model.pop("path", None)
 		x,y = next(iter(self.upper_loader))
 		self.upper_model = hp.config_to_instance(**training_arg.upper.model,
@@ -76,7 +73,6 @@ class Trainer:
 		self.upper_var = tuple(self.upper_model.parameters())
 
 		# create a pytorch Modules whose output is a scalar
-		self.timer(self.counter, " creating losses " )
 
 		self.lower_loss_module = hp.config_to_instance(**training_arg.lower.objective,
 								upper_model=self.upper_model, 
@@ -94,7 +90,6 @@ class Trainer:
 		self.upper_loss = Functional(self.upper_loss_module)
 
 
-		self.timer(self.counter, " creating optimizers " )
 
 		self.upper_optimizer = hp.config_to_instance(params=self.upper_var, **training_arg.upper.optimizer)
 		self.use_upper_scheduler = training_arg.upper.scheduler.pop("use_scheduler", None)
@@ -102,18 +97,16 @@ class Trainer:
 			self.upper_scheduler = hp.config_to_instance(optimizer=self.upper_optimizer, **training_arg.upper.scheduler)
 		
 		#Construct the selection
-		self.check_config()
 		self.selection = make_selection(self.lower_loss,
 									self.lower_var,
 									self.lower_loader,
-									self.args.selection,
+									self.args.algorithm,
 									self.device,
 									self.dtype)
 
 
 		self.count_max, self.total_batches = self.set_count_max()
 
-		self.timer(self.counter, " creating metrics " )
 
 		self.metrics = Metrics(training_arg.metrics,self.device,self.dtype)
 		name = training_arg.metrics.name
@@ -140,13 +133,6 @@ class Trainer:
 		if self.counter==0:
 			self.alg_time = 0.
 		while self.counter<=self.count_max:
-			# if self.epoch < self.args.training.total_epoch/4:
-			# 	self.selection.add_correction = False
-			# else: 
-			# 	if self.selection.correction:
-			# 		self.selection.add_correction = True
-			# 		#for g in self.upper_optimizer.param_groups:
-			# 		#	g['lr'] /= 10.
 
 			for batch_idx, data in enumerate(self.upper_loader):
 				#print(batch_idx)
@@ -160,7 +146,7 @@ class Trainer:
 
 			self.epoch += 1
 			weights = self.upper_model.x.data.cpu().numpy()
-			self.logger.log_artifacts({'weights':weights}, f"weights/{self.epoch}", artifact_type="numpy")
+			#self.logger.log_artifacts({'weights':weights}, f"weights/{self.epoch}", artifact_type="numpy")
 
 
 	def zero_grad(self):
@@ -218,14 +204,10 @@ class Trainer:
 		
 		try:
 			if self.epoch%self.args.training.metrics.disp_freq==0:
-				self.timer(self.counter, str({k:metrics[k] for k in disp_keys}))
+				print(metrics)
 		except:
 			pass
 		return metrics
-	def check_config(self):
-
-		if self.args.selection.optimizer.momentum==0.:
-			self.args.selection.optimizer.momentum=None
 
 	def set_count_max(self):
 		total_batches = int(self.meta_data['total_samples']/self.meta_data['b_size'])

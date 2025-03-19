@@ -5,8 +5,8 @@ from core.utils import grad_with_none, config_to_instance
 import core.utils as utils
 from core.utils import RingGenerator
 
-import jax ## need to import jax before torchopt otherwise get an error
-import TorchOpt
+#import jax ## need to import jax before torchopt otherwise get an error
+import torchopt
 from itertools import cycle
 import copy
 from functools import partial
@@ -24,7 +24,7 @@ def make_selection(func,
 
 	generator = RingGenerator(loader, device, dtype)
 	
-	if options.correction:
+	if options.implicit_diff:
 		linear_solver = config_to_instance(**options.linear_solver)
 		linear_op = config_to_instance(**options.linear_op,func=func,generator=generator)
 		if options.linear_op.stochastic:
@@ -41,7 +41,7 @@ def make_selection(func,
 
 	optimizer = DiffOpt(func,generator,
 							init_lower_var,options.optimizer,
-							options.warm_start_iter,options.unrolled_iter,
+							options.opt_iter,options.unrolled_iter,
 							track_grad_for_backward=track_grad_for_backward)
 	use_scheduler = options.scheduler.pop("use_scheduler", None)
 	if use_scheduler:
@@ -50,7 +50,6 @@ def make_selection(func,
 	else:
 		scheduler = None
 	dual_var_warm_start = options.dual_var_warm_start
-	compute_latest_correction = options.compute_latest_correction
 	selection = Selection(func,
 						  init_lower_var,
 						  generator,
@@ -58,9 +57,7 @@ def make_selection(func,
 						  linear_op,
 						  optimizer,
 						  scheduler,
-						  correction = options.correction,
-						  add_correction=options.add_correction,
-						  compute_latest_correction=compute_latest_correction,
+						  implicit_diff = options.implicit_diff,
 						  dual_var_warm_start=dual_var_warm_start,
 						  track_grad_for_backward = track_grad_for_backward
 						  )
@@ -75,9 +72,7 @@ class Selection(nn.Module):
 				linear_op,
 				optimizer,
 				scheduler,
-				correction = True,
-				add_correction=True,
-				compute_latest_correction=False,
+				implicit_diff = True,
 				dual_var_warm_start=True,
 				track_grad_for_backward=False):
 		super(Selection,self).__init__()
@@ -89,12 +84,10 @@ class Selection(nn.Module):
 		self.linear_op = linear_op
 		self.optimizer = optimizer
 		self.scheduler = scheduler
-		self.correction = correction
-		self.add_correction= add_correction
-		self.compute_latest_correction = compute_latest_correction
+		self.implicit_diff = implicit_diff
 		self.track_grad_for_backward = track_grad_for_backward
 		self.dual_var_warm_start = dual_var_warm_start
-		if self.correction:
+		if self.implicit_diff:
 			self.dual_var = tuple([torch.zeros_like(p) for p in init_lower_var])
 		else:
 			self.dual_var = None
@@ -169,22 +162,20 @@ class ArgMinOp(torch.autograd.Function):
 		## Solve a system Ax+b=0, 
 		# A: the hessian of the lower objective, 
 		# b:   grad_selection_lower
-		if selection.correction:
+		if selection.implicit_diff:
 			with  torch.enable_grad():	
 				lower_var = tuple([ param.detach() for param in  iterates[-1]])
 				
 				for param in lower_var:
 					param.requires_grad = True
 				selection.linear_op.set_param_values(grad,upper_var,lower_var,inputs)
-				correction,dual_var = selection.linear_solver(linear_op = selection.linear_op,
+				implicit_grad,dual_var = selection.linear_solver(linear_op = selection.linear_op,
 																b_vector=grad_selection_lower,
-																init=selection.dual_var,
-																compute_latest=selection.compute_latest_correction)			
-			## summing the contributions of partial_x phi and correction term
-			if selection.add_correction:
-				for g_upper,g_lin in zip(grad_selection_upper,correction):
-					if g_lin is not None:
-						g_upper.data.add_(g_lin.detach())
+																init=selection.dual_var)			
+			## summing the contributions of partial_x phi and implicit gradient term
+			for g_upper,g_lin in zip(grad_selection_upper,implicit_grad):
+				if g_lin is not None:
+					g_upper.data.add_(g_lin.detach())
 			
 			## update the dual variable for next iteration 
 			selection.update_dual(dual_var)
@@ -199,7 +190,7 @@ class ArgMinOp(torch.autograd.Function):
 
 class DiffOpt(object):
 	def __init__(self,func,generator,params,config_dict, 
-						warm_start_iter,unrolled_iter,
+						opt_iter,unrolled_iter,
 						track_grad_for_backward=False):
 		self.func = func
 		self.generator = generator
@@ -210,10 +201,11 @@ class DiffOpt(object):
 		self.optimizer = config_to_instance(**self.config_opt, lr = self.lr)
 		self.opt_state = self.optimizer.init(params)		
 		self.unrolled_iter = unrolled_iter
-		self.warm_start_iter = warm_start_iter
+		assert (opt_iter >= self.unrolled_iter) 
+		self.warm_start_iter = opt_iter-self.unrolled_iter
 		self.track_grad_for_backward = track_grad_for_backward
 
-		assert (self.warm_start_iter + self.unrolled_iter >0) 
+		
 	
 	def update_lr(self,lr):
 		self.optimizer = config_to_instance(**self.config_opt,lr=lr)
@@ -262,7 +254,7 @@ class DiffOpt(object):
 				track_grad=False
 
 			updates, self.opt_state = self.optimizer.update(grad, self.opt_state, inplace=not track_grad)
-			cur_lower_var = TorchOpt.apply_updates(cur_lower_var, updates, inplace=not track_grad)
+			cur_lower_var = torchopt.apply_updates(cur_lower_var, updates, inplace=not track_grad)
 			
 			if i>=self.warm_start_iter:
 				all_lower_var.append(cur_lower_var)

@@ -13,12 +13,13 @@ class GD(LinearSolverAlg):
 		super(GD,self).__init__()
 		self.n_iter= n_iter
 		self.lr= lr
-	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+	def __call__(self,linear_op,b_vector,init,apply_cross_derivatives=True):
 		out_lower = init
 		for i in range(self.n_iter):
 			out_upper, update = linear_op(out_lower)
 			out_lower = tuple([ x - self.lr*(ax+b) if ax is not None else x - self.lr*b for x,ax,b in zip(out_lower,update,b_vector)])
-		if compute_latest:
+		
+		if apply_cross_derivatives: 
 			out_upper,_ = linear_op(out_lower,retain_graph=False, which='upper')
 		return out_upper,out_lower
 
@@ -28,7 +29,7 @@ class Normal_GD(LinearSolverAlg):
 		super(Normal_GD,self).__init__()
 		self.n_iter= n_iter
 		self.lr= lr
-	def __call__(self,linear_op,b_vector,init,compute_latest=False):
+	def __call__(self,linear_op,b_vector,init,apply_cross_derivatives=True):
 		out_lower = init
 		if linear_op.stochastic:
 			retain_graph = False
@@ -37,11 +38,11 @@ class Normal_GD(LinearSolverAlg):
 		for i in range(self.n_iter):
 			out_upper, update = linear_op(out_lower,retain_graph=retain_graph)
 			update = tuple([ax+b if ax is not None else b for ax,b in zip(update,b_vector)])
-			if i == self.n_iter-1 and not compute_latest:
+			if i == self.n_iter-1 and not apply_cross_derivatives:
 				retain_graph = False
 			out_upper, update = linear_op(update,retain_graph=retain_graph)
 			out_lower = tuple([ x - self.lr*ax if ax is not None else x  for x,ax in zip(out_lower,update)])
-		if compute_latest:
+		if apply_cross_derivatives:
 			out_upper,_ = linear_op(out_lower,retain_graph=False, which='upper')
 
 		return out_upper,out_lower

@@ -1,6 +1,6 @@
 defaults:
   - training: multitask_cifar100
-  - selection: BGS
+  - algorithm: amigo
 
 
 system: 
