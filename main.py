@@ -11,7 +11,6 @@ import os
 import importlib
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-torch.multiprocessing.set_sharing_strategy('file_system')
 import hydra
 import dill as pkl
 
@@ -32,7 +31,7 @@ print(os.getcwd())
 
 work_dir = os.getcwd()
 
-@hydra.main(config_name='config.yaml',config_path='./configs')
+@mlxp.launch(config_path="configs")
 def run(cfg):
 	os.chdir(work_dir)
 	module, attr = os.path.splitext(cfg.training.trainer_name) 
