@@ -7,11 +7,12 @@ This repository contains code for reproducing the experimental results from the 
 
 ## Installation
 
-To run this code, first install the required dependencies, including the MLXP experiment manager and `torchopt`:
+To run this code, first install the required dependencies, including the MLXP experiment manager,  `torchopt` and  `functorch` :
 
 ```sh
 pip install MLXP
 pip install torchopt
+pip install functorch
 ```
 
 ## Reproducing Experimental Results

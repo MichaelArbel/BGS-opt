@@ -6,7 +6,6 @@ import time
 import numpy as np
 import omegaconf
 
-from functorch import jvp, grad, vjp
 from functorch import make_functional_with_buffers
 import os
 
@@ -46,7 +45,6 @@ class Functional(object):
 			return self.eval_func(params,self.buffers,inputs,**kwargs)
 	def __call__(self,inputs,upper_var,lower_var,train_mode=True,**kwargs):
 		return self.eval(inputs,upper_var,lower_var,train_mode=train_mode,**kwargs)
-
 
 
 class RingGenerator:
@@ -168,22 +166,6 @@ def config_to_instance(config_module_name="name",**config):
 	if config:
 		attr = attr(**config)
 	return attr
-
-
-
-# def config_to_instance(config_module_name="name",**config):
-# 	module_name = config.pop(config_module_name)
-# 	try:
-# 		attr = import_module(module_name)
-# 		if config:
-# 			attr = attr(**config)
-# 	except:
-# 		attr = eval(module_name)(**config)
-# 	return attr
-
-
-
-
 
 
 
