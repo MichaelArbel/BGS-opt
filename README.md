@@ -2,8 +2,8 @@
 
 This repository contains code for reproducing the experimental results from the papers:
 
-- **AmIGO: Approximate Implicit Gradients for Nested Optimization** ([Paper Link](https://arxiv.org/pdf/2111.14580))
-- **Bilevel Games with Selection: A Selection Map Perspective** ([Paper Link](https://arxiv.org/abs/2207.04888))
+- **Amortized Implicit Differentiation for Stochastic Bilevel Optimization** ([Paper Link](https://arxiv.org/abs/2111.14580))
+- **Non-Convex Bilevel Games with Critical Point Selection Maps** ([Paper Link](https://arxiv.org/abs/2207.04888))
 
 ## Installation
 
