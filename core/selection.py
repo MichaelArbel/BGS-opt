@@ -116,6 +116,7 @@ class Selection(nn.Module):
 			val  =opt_lower_var[-1]
 			opt_lower_var = opt_lower_var[:-1]
 		return opt_lower_var, val
+
 class ArgMinOp(torch.autograd.Function):
 
 	@staticmethod
