@@ -1,18 +1,19 @@
 defaults:
-  - system : default
-  - cluster : OAR
-  - launcher: default
-  - logs: default
   - training: multitask_cifar100
   - selection: BGS
-hydra:
-  output_subdir: null
-  run:
-    dir: .
-  sweep:
-    dir: .
-    subdir: .
-  hydra_logging:
-    disable_existing_loggers: True
-  job_logging:
-    disable_existing_loggers: True
+
+
+system: 
+  device : -2
+  seed:
+    torch: 0
+    numpy: 0
+  dtype: 64
+  num_workers: 1
+  slurm_id: ''
+  dataparallel: False
+  experimentalist: True
+  hostname: ''
+  process_id: -1
+  date: ''
+  time: ''

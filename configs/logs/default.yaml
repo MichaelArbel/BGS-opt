@@ -1,5 +1,0 @@
-# @package logs
-log_dir : 'data/outputs'
-log_name : 'logs'
-log_to_file : False
-log_id : null
